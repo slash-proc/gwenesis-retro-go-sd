@@ -1,0 +1,4 @@
+[submodule "src/gwenesis"]
+	path = src/gwenesis
+	url = https://github.com/sylverb/gwenesis
+	branch = sd

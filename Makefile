@@ -1,121 +1,104 @@
-# Retro-Go SD template — one project = one CORE or one GWHB homebrew.
+# Gwenesis — Sega Genesis / Mega Drive core for Retro-Go SD.
 #
-#   make                  — build + pack (default: PROJECT_KIND=core)
-#   make PROJECT_KIND=homebrew
+#   make                  — build + pack → md.bin
 #   make docker           — same build inside Docker (no host toolchain)
 #   make docker_shell     — interactive shell in the builder image
 #
-# Customize CORE_NAME / pack metadata below, then replace src/main.c.
-# Verbose compiler lines: make V=
+# Drop md.bin on the SD card under /cores/. ROMs under /roms/md/
+# (extensions: .md .gen .bin).
+#
+# Emulator: src/gwenesis (submodule). Porting: src/main_gwenesis.c
+# (from firmware Core/Src/porting/gwenesis/). Verbose: make V=
 
 #######################################
 # Project identity
 #######################################
-# core     → pack_core.py     → /cores/<name>.bin
-# homebrew → pack_homebrew.py → /homebrews/<name>.bin
 PROJECT_KIND ?= core
 
-CORE_NAME  := example
-CORE_ENTRY := app_main
+CORE_NAME  := md
+CORE_ENTRY := app_main_gwenesis
+
+CORE_GWENESIS := src/gwenesis
 
 CORE_C_SOURCES := \
-src/main.c
+$(CORE_GWENESIS)/src/cpus/M68K/m68kcpu.c \
+$(CORE_GWENESIS)/src/cpus/Z80/Z80.c \
+$(CORE_GWENESIS)/src/sound/z80inst.c \
+$(CORE_GWENESIS)/src/sound/ym2612.c \
+$(CORE_GWENESIS)/src/sound/gwenesis_sn76489.c \
+$(CORE_GWENESIS)/src/bus/gwenesis_bus.c \
+$(CORE_GWENESIS)/src/bus/gwenesis_sram.c \
+$(CORE_GWENESIS)/src/bus/gwenesis_eeprom.c \
+$(CORE_GWENESIS)/src/io/gwenesis_io.c \
+$(CORE_GWENESIS)/src/vdp/gwenesis_vdp_mem.c \
+$(CORE_GWENESIS)/src/vdp/gwenesis_vdp_gfx.c \
+$(CORE_GWENESIS)/src/savestate/gwenesis_savestate.c \
+src/main_gwenesis.c \
+src/md_i18n.c
 
-# Relative path so Docker bind-mounts work (do NOT use $(abspath) — it
-# bakes the host path into Make prerequisites / .d files). Do not name
-# this SDK_ROOT: that env var is commonly set by Android SDK installs.
-GNW_CORE_SDK ?= sdk
-# Separate build trees so switching PROJECT_KIND does not reuse stale .o.
-BUILD_DIR ?= build/$(PROJECT_KIND)
+CORE_C_INCLUDES := \
+-I$(CORE_GWENESIS)/src/cpus/M68K \
+-I$(CORE_GWENESIS)/src/cpus/Z80 \
+-I$(CORE_GWENESIS)/src/sound \
+-I$(CORE_GWENESIS)/src/bus \
+-I$(CORE_GWENESIS)/src/vdp \
+-I$(CORE_GWENESIS)/src/io \
+-I$(CORE_GWENESIS)/src/savestate \
+-Isrc
 
-#######################################
-# Kind-specific compile defs + packing
-#######################################
-ifeq ($(PROJECT_KIND),core)
-# Match release-firmware layout of retro_emulator_file_t: COVERFLOW fields
-# sit before cheat_* — CHEAT_CODES alone with COVERFLOW=0 misaligns pointers.
-# MAX_CHEAT_CODES mirrors Makefile.common's release default.
+# LSB_FIRST/TABLES_FULL: M68K + Z80. TARGET_GNW: G&W branches in gwenesis.
+# COVERFLOW/CHEAT_CODES: match firmware retro_emulator_file_t layout.
 CORE_C_DEFS := \
+-DLSB_FIRST \
+-DTABLES_FULL \
+-DTARGET_GNW \
 -DPROJECT_KIND_CORE=1 \
 -DCOVERFLOW=1 \
 -DCHEAT_CODES=1 \
 -DMAX_CHEAT_CODES=13
 
-PACKED_BIN  := $(CORE_NAME).bin
+# ym2612.c builds sine/log FM tables with libm sin()/log() at startup.
+CORE_LDLIBS := -lm
+
+# Relative path so Docker bind-mounts work (do NOT use $(abspath)).
+GNW_CORE_SDK ?= sdk
+BUILD_DIR ?= build/$(PROJECT_KIND)
+
+ifeq ($(PROJECT_KIND),core)
+PACKED_BIN  := md.bin
 PAD_LOGO    := src/assets/pad.png
 HEADER_LOGO := src/assets/header.png
-
-else ifeq ($(PROJECT_KIND),homebrew)
-CORE_C_DEFS := \
--DPROJECT_KIND_HOMEBREW=1
-
-PACKED_BIN := ExampleHB.bin
-COVER_JPG  := $(BUILD_DIR)/cover.jpg
-
+# Assets are light-on-dark; pack_core --logo-invert restores lit 1bpp glyphs.
 else
-$(error PROJECT_KIND must be 'core' or 'homebrew' (got '$(PROJECT_KIND)'))
+$(error Gwenesis is a dynamic core only (PROJECT_KIND=core); got '$(PROJECT_KIND)')
 endif
 
 include $(GNW_CORE_SDK)/Makefile
 
-PACK_CORE     := $(GNW_CORE_SDK)/tools/pack_core.py
-PACK_HOMEBREW := $(GNW_CORE_SDK)/tools/pack_homebrew.py
+PACK_CORE := $(GNW_CORE_SDK)/tools/pack_core.py
 
 #######################################
 # Pack
 #######################################
-.PHONY: pack cover
-
-ifeq ($(PROJECT_KIND),core)
+.PHONY: pack
 
 pack: $(TARGET_BIN) $(PAD_LOGO) $(HEADER_LOGO)
 	$(V)$(ECHO) [ PACK CORE ] $(PACKED_BIN)
 	$(V)python3 $(PACK_CORE) \
 		--elf $(TARGET_ELF) --bin $(TARGET_BIN) \
-		--system-name "Example Core" --dirname example \
-		--extensions "bin" \
-		--core-name "Example" \
+		--system-name "Sega Genesis" --dirname md \
+		--extensions "md gen bin" \
+		--core-name "Gwenesis" \
 		--version 1.0.0 \
-		--cheat-ext ggcodes \
 		--pad-logo $(PAD_LOGO) \
 		--header-logo $(HEADER_LOGO) \
+		--logo-invert \
 		--out $(PACKED_BIN)
-
-else
-
-.PHONY: cover
-cover: $(COVER_JPG)
-
-# Must fit gui.c COVER_MAX_WIDTH x COVER_MAX_HEIGHT (186x100) and
-# COVER_SIZE (10 KiB) — oversized covers smash the HW JPEG scratch.
-$(COVER_JPG):
-	@mkdir -p $(BUILD_DIR)
-	python3 -c "from pathlib import Path; from PIL import Image, ImageDraw, ImageFont; \
-img=Image.new('RGB', (186,100), (32,48,96)); \
-d=ImageDraw.Draw(img); \
-d.rectangle((8,8,177,91), outline=(220,220,255), width=2); \
-d.text((20,38), 'Example HB', fill=(255,255,255)); \
-img.save('$(COVER_JPG)', 'JPEG', quality=85, optimize=True); \
-sz=Path('$(COVER_JPG)').stat().st_size; \
-assert sz <= 10*1024, f'cover too big: {sz}'"
-
-pack: $(TARGET_BIN) $(COVER_JPG)
-	$(V)$(ECHO) [ PACK GWHB ] $(PACKED_BIN)
-	$(V)python3 $(PACK_HOMEBREW) \
-		--elf $(TARGET_ELF) --bin $(TARGET_BIN) \
-		--name "Example Homebrew" --version 1.0.0 \
-		--cover $(COVER_JPG) \
-		--out $(PACKED_BIN)
-
-endif
 
 all: pack
 
 clean::
 	$(V)rm -f $(PACKED_BIN)
-ifeq ($(PROJECT_KIND),homebrew)
-	$(V)rm -f $(COVER_JPG)
-endif
 
 #######################################
 # Docker (same image as firmware repo)
@@ -127,7 +110,6 @@ DOCKER_REPOSITORY ?= sylverb/retro-go-sd-builder
 DOCKER_IMAGE ?= $(DOCKER_REPOSITORY):$(RELEASE_VERSION)
 
 DOCKER_TTY_FLAG := $(shell if [ -t 0 ]; then echo -it; else echo; fi)
-# Host UID so build/ artifacts are not root-owned on the bind mount.
 DOCKER_USER := $(shell id -u):$(shell id -g)
 DOCKER_RUN := docker run --rm $(DOCKER_TTY_FLAG) \
 	--user $(DOCKER_USER) \
@@ -135,8 +117,6 @@ DOCKER_RUN := docker run --rm $(DOCKER_TTY_FLAG) \
 	-w /opt/workdir \
 	$(DOCKER_IMAGE)
 
-# Compile inside the published builder image (uses the local copy).
-# Refresh with `make docker_pull` when you want a newer digest for the tag.
 docker:
 	$(V)$(ECHO) "[ DOCKER ]" $(DOCKER_IMAGE) "PROJECT_KIND=$(PROJECT_KIND)"
 	$(V)$(DOCKER_RUN) make --no-print-directory -j$$(nproc) PROJECT_KIND=$(PROJECT_KIND)
@@ -145,6 +125,5 @@ docker_pull:
 	$(V)$(ECHO) "[ PULL ]" $(DOCKER_IMAGE)
 	$(V)docker pull $(DOCKER_IMAGE)
 
-# Interactive shell with the same image / mount as `make docker`.
 docker_shell:
 	$(DOCKER_RUN) bash
