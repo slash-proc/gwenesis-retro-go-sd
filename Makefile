@@ -97,6 +97,18 @@ pack: $(TARGET_BIN) $(PAD_LOGO) $(HEADER_LOGO)
 
 all: pack
 
+
+# Read-only helpers for CI / scripts (make print-PROJECT_KIND, etc.).
+.PHONY: print-PROJECT_KIND print-PACKED_BIN print-CORE_NAME print-DOCKER_IMAGE
+print-PROJECT_KIND:
+	@echo $(PROJECT_KIND)
+print-PACKED_BIN:
+	@echo $(PACKED_BIN)
+print-CORE_NAME:
+	@echo $(CORE_NAME)
+print-DOCKER_IMAGE:
+	@echo $(DOCKER_IMAGE)
+
 clean::
 	$(V)rm -f $(PACKED_BIN)
 
