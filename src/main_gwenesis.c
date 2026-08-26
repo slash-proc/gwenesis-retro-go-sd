@@ -32,6 +32,7 @@ __license__ = "GPLv3"
 #include "common.h"
 #include "rom_manager.h"
 #include "odroid_settings.h"
+#include "appid.h"
 
 /* Gwenesis Emulator */
 #include "m68k.h"
@@ -45,17 +46,18 @@ __license__ = "GPLv3"
 #include "gwenesis_sram.h"
 #include "gw_malloc.h"
 
+#ifndef HOST_BUILD
 /* Standalone CORE: talks to firmware only through gw_firmware_abi_t.
  * Include after the headers above so their externs for common_emu_state /
- * ACTIVE_FILE / ram_start / frame_counter are parsed before this header
+ * ACTIVE_FILE / frame_counter are parsed before this header
  * rewrites later uses into ABI-pointer accesses. */
 #include "gw_core_bridge.h"
+#else
+#include "host_compat.h"
+#endif
 #include "md_i18n.h"
 
-/* Match firmware appid.h APPID_MD — save paths / settings namespace. */
-#define APPID_MD 8
-
-/* Bridged via redefine-syms → core_get_ofw_is_mario (gw_ofw.h not in SDK). */
+/* Bridged via redefine-syms → core_get_ofw_is_mario on device; host stub in host_emu.c. */
 bool get_ofw_is_mario(void);
 
 /* ROM_DATA/ROM_DATA_LENGTH/ROM_EXT (extern-declared by rom_manager.h,
@@ -68,7 +70,9 @@ const unsigned char *ROM_DATA = NULL;
 unsigned ROM_DATA_LENGTH = 0;
 const char *ROM_EXT = NULL;
 
+#if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC optimize("Ofast")
+#endif
 
 #define ENABLE_DEBUG_OPTIONS 0
 
@@ -658,13 +662,22 @@ static bool gwenesis_load_rom(void)
     return true;
 }
 
+/* Pause-menu / overlay repaint — file-scope (not a nested GCC function) so
+ * clang host builds work the same as arm-none-eabi-gcc. */
+static void gwenesis_repaint(void)
+{
+    unsigned short *screen = lcd_get_active_buffer();
+    gwenesis_vdp_set_buffer(&screen[vert_screen_offset + hori_screen_offset]);
+    for (int l = 0; l < (int)lines_per_frame; l++)
+        gwenesis_vdp_render_line(l);
+    common_ingame_overlay();
+}
+
 /* Main */
 int app_main_gwenesis(uint8_t load_state, uint8_t start_paused, int8_t save_slot)
 {
 
     printf("Genesis start\n");
-
-    ram_start = (uint32_t)&__CORE_BSS_END__;
 
     // Set medium clock speed for better performance if CPU is not overclocked
     // Maximum speed could cause random crash so it should not be used
@@ -672,7 +685,7 @@ int app_main_gwenesis(uint8_t load_state, uint8_t start_paused, int8_t save_slot
       SystemClock_Config(2);
   }
 
-    odroid_system_init(APPID_MD, GWENESIS_AUDIO_FREQ_NTSC);
+    odroid_system_init(APPID_CORE, GWENESIS_AUDIO_FREQ_NTSC);
     odroid_system_emu_init(&gwenesis_system_LoadState,
                            &gwenesis_system_SaveState,
                            &gwenesis_system_Screenshot,
@@ -803,18 +816,7 @@ int app_main_gwenesis(uint8_t load_state, uint8_t start_paused, int8_t save_slot
 
       hori_screen_offset = 0; //REG12_MODE_H40 ? 0 : (320 - 256) / 2;
 
-    void _repaint()
-    {
-        screen = lcd_get_active_buffer();
-        gwenesis_vdp_set_buffer(&screen[vert_screen_offset + hori_screen_offset]);
-        for (int l = 0; l < lines_per_frame; l++)
-        {
-            gwenesis_vdp_render_line(l); /* render scan_line */
-        }
-        common_ingame_overlay();
-    }
-
-    common_emu_input_loop(&joystick, options, &_repaint);
+    common_emu_input_loop(&joystick, options, &gwenesis_repaint);
     common_emu_input_loop_handle_turbo(&joystick);
 
     // bool drawFrame =

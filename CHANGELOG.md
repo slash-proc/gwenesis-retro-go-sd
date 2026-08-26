@@ -17,22 +17,29 @@ When you cut a release:
 2. Commit the changelog update.
 3. Push the tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 
-CI reads the matching section and uses it as the GitHub Release notes. The tag
-is also used in staged asset names (`<binary>-<tag>.bin`, `<binary>-<tag>.zip`).
+CI reads the matching section and uses it as the GitHub Release notes. Assets
+attached to the release:
+
+- `<binary>-<tag>.zip` — SD layout only (`cores/` + packed `.bin`)
+- `<binary>-<tag>-debug.zip` — ELF + linker map (use `arm-none-eabi-addr2line` for crash PC/LR → function/line)
 
 ## [Unreleased]
 
 ### Added
 
-First release
+- Sync from `retro-go-sd-templates`: debug release zips (ELF + map), host SDL
+  tree, bridge override knobs, `CORE_VERSION` from git tags.
 
 ### Changed
 
-First release
+- Vendored SDK refreshed (ABI sync 2026-08-26): odroid headers under
+  `Core/Inc/porting`, `appid.h` (`APPID_CORE`), firmware seeds `ram_start`.
+- Pack/CI: version from `git describe`; release ships install + debug archives.
+- Packed binary renamed to `gwenesis.bin` (release zips: `gwenesis-<tag>.zip`).
 
 ### Fixed
 
-First release
+- (none yet)
 
 ## [v1.0.0] - 2026-08-12
 
@@ -44,6 +51,6 @@ Initial public release for Megadrive/Genesis core.
 
 ### Install
 
-- Copy `md.bin` to `/cores/` on the SD card.
+- Copy `gwenesis.bin` to `/cores/` on the SD card.
 - Place test ROMs under `/roms/md/`.
 - Requires firmware whose ABI matches `SDK_VERSION` in this repository.

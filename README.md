@@ -14,7 +14,7 @@ Talks to the launcher **only** through `gw_firmware_abi_t` (vendored under
 
 | | Path |
 |--|------|
-| Core | `/cores/md.bin` |
+| Core | `/cores/gwenesis.bin` |
 | ROMs | `/roms/md/` (`.md` `.gen` `.bin`) |
 
 ## Requirements
@@ -40,20 +40,25 @@ make
 # or: make docker
 ```
 
-Produces `md.bin` → copy to `/cores/md.bin` on the SD card.
+Produces `gwenesis.bin` → copy to `/cores/gwenesis.bin` on the SD card.
 
 ## Layout
 
 ```
-Makefile              Build + pack + docker
+Makefile              Build + pack + docker (+ host SDL stub)
 src/
   main_gwenesis.c     Entry + frame loop / options / ROM load
   md_i18n.c           Pause-menu strings
   assets/             Pad + header 1bpp logos
 src/gwenesis/         Emulator submodule
 sdk/                  Vendored ABI bridge, headers, linker scripts, packers
-scripts/              sync_from_firmware.sh
+scripts/              sync_from_firmware.sh, stage_release.py, resolve_addr.py
+host/                 SDL preview shim (from template; not fully wired for Gwenesis)
 ```
+
+Tag releases attach an install zip (`cores/gwenesis.bin` → `gwenesis-<tag>.zip`)
+and a debug zip (ELF + map) for `arm-none-eabi-addr2line` crash decoding — see
+`scripts/DEBUG_README.md`.
 
 ## ABI compatibility
 
