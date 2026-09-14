@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.0.5] - 2026-09-14
+
+### Changed
+
+- Bound per-title persistent-save storage at the core's 64 KiB cartridge
+  SRAM allocation, which also contains supported serial EEPROM data.
+
 ## [v0.0.4] - 2026-09-13
 
 ### Changed
