@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Support large Super Street Fighter II cartridges, including Ultimate Mortal
+  Kombat Trilogy, through the updated Gwenesis core.
+- Preserve the Z80 bank across CPU reset to restore The Terminator's PCM sound
+  effects.
+
 ## [v0.0.5] - 2026-09-14
 
 ### Changed
